@@ -38,7 +38,7 @@ func main() {
 		log.Panic(err)
 	}
 
-	bot.Debug, err = strconv.ParseBool(debug)
+	bot.Debug, _ = strconv.ParseBool(debug)
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -50,22 +50,25 @@ func main() {
 	for update := range updates {
 		if update.Message != nil {
 			log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-			msg := formreplyMessage(update.Message.Chat.ID, update.Message.Command(), update.Message.Text, folder)
+			msg := formReplyMessage(update.Message.Chat.ID, update, folder)
 			msg.ReplyToMessageID = update.Message.MessageID
+
 			bot.Send(msg)
 		}
 	}
 }
 
-func formreplyMessage(chatId int64, messageText string, text string, folder string) tgbotapi.MessageConfig {
+func formReplyMessage(chatId int64, update tgbotapi.Update, folder string) tgbotapi.MessageConfig {
+	message := update.Message
 
-	switch messageText {
+	switch message.Command() {
 	case "start":
 		return tgbotapi.NewMessage(chatId, greetingsMessage)
 	case "list":
 		return tgbotapi.NewMessage(chatId, getFileList(folder))
 	case "read":
-		return tgbotapi.NewMessage(chatId, readFile(strings.Split(text, " ")[1], folder))
+		text, _ := strings.CutPrefix(message.Text, "/read")
+		return tgbotapi.NewMessage(chatId, readFile(text, folder))
 	default:
 		return tgbotapi.NewMessage(chatId, noSuchCommanText)
 	}
@@ -83,7 +86,11 @@ func getFileList(folder string) string {
 	return message
 }
 
-func readFile(file string, folder string) string {
+func readFile(text string, folder string) string {
+	file := strings.Trim(text, " ")
+	if strings.HasPrefix(file, "@") {
+		file = strings.Split(file, " ")[1]
+	}
 	fileContent, err := os.ReadFile(folder + "/" + file)
 	if err != nil {
 		return err.Error()
