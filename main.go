@@ -3,8 +3,6 @@ package main
 import (
 	"log"
 
-	"strings"
-
 	"strconv"
 
 	"os"
@@ -14,7 +12,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-const greetingsMessage = "Добрый день, для получения списка файлов /list, для чтения /read"
+const greetingsMessage = "Добрый день, для получения списка файлов /list, для чтения /read, /kroki <diagram> для формирования диаграммы"
 const noSuchCommanText = "Нет такой команды, для получения списка команд используйте /start"
 
 func init() {
@@ -50,10 +48,18 @@ func main() {
 	for update := range updates {
 		if update.Message != nil {
 			log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-			msg := formReplyMessage(update.Message.Chat.ID, update, folder)
-			msg.ReplyToMessageID = update.Message.MessageID
 
-			bot.Send(msg)
+			switch update.Message.Command() {
+			case "kroki":
+				text := getMessageTextOnly(update.Message.Text, update.Message.Command())
+				msg := tgbotapi.NewPhoto(update.Message.Chat.ID, getKrokiMedia(text))
+				msg.ReplyToMessageID = update.Message.MessageID
+				bot.Send(msg)
+			default:
+				msg := formReplyMessage(update.Message.Chat.ID, update, folder)
+				msg.ReplyToMessageID = update.Message.MessageID
+				bot.Send(msg)
+			}
 		}
 	}
 }
@@ -67,33 +73,9 @@ func formReplyMessage(chatId int64, update tgbotapi.Update, folder string) tgbot
 	case "list":
 		return tgbotapi.NewMessage(chatId, getFileList(folder))
 	case "read":
-		text, _ := strings.CutPrefix(message.Text, "/read")
+		text := getMessageTextOnly(message.Text, message.Command())
 		return tgbotapi.NewMessage(chatId, readFile(text, folder))
 	default:
 		return tgbotapi.NewMessage(chatId, noSuchCommanText)
 	}
-}
-
-func getFileList(folder string) string {
-	files, err := os.ReadDir(folder)
-	if err != nil {
-		log.Fatal(err)
-	}
-	message := ""
-	for _, file := range files {
-		message = message + file.Name() + ";  "
-	}
-	return message
-}
-
-func readFile(text string, folder string) string {
-	file := strings.Trim(text, " ")
-	if strings.HasPrefix(file, "@") {
-		file = strings.Split(file, " ")[1]
-	}
-	fileContent, err := os.ReadFile(folder + "/" + file)
-	if err != nil {
-		return err.Error()
-	}
-	return string(fileContent)
 }
